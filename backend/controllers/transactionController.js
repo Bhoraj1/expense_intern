@@ -22,7 +22,7 @@ export const addTransaction = async (req, res, next) => {
     // Calculate total amount based on tax
     let total_amount = parseFloat(amount);
     if (tax_type === "percentage") {
-      total_amount = amount + (amount * tax_value) / 100;
+      total_amount = parseFloat(amount) + (parseFloat(amount) * parseFloat(tax_value)) / 100;
     } else {
       total_amount = parseFloat(amount) + parseFloat(tax_value);
     }
@@ -51,20 +51,52 @@ export const addTransaction = async (req, res, next) => {
   }
 };
 
-// Get all transactions for user
+// Get all transactions for user with pagination and filters
 export const getTransactions = async (req, res, next) => {
   try {
     const userId = req.user.userId;
+    const { page = 1, limit = 10, category, type } = req.query;
 
-    // Get all transactions for this user
+    const offset = (page - 1) * limit;
+
+    // Build WHERE clause with filters
+    let whereClause = "WHERE user_id = ?";
+    const queryParams = [userId];
+
+    if (category && category.trim() !== "") {
+      whereClause += " AND category = ?";
+      queryParams.push(category);
+    }
+
+    if (type && type.trim() !== "") {
+      whereClause += " AND type = ?";
+      queryParams.push(type);
+    }
+
+    // Get total count for pagination
+    const [countResult] = await db.execute(
+      `SELECT COUNT(*) as total FROM transactions ${whereClause}`,
+      queryParams
+    );
+    const total = countResult[0].total;
+
+    // Get transactions with pagination
     const [transactions] = await db.execute(
-      "SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC",
-      [userId]
+      `SELECT * FROM transactions ${whereClause} ORDER BY created_at DESC LIMIT ${parseInt(
+        limit
+      )} OFFSET ${parseInt(offset)}`,
+      queryParams
     );
 
     res.json({
       message: "Transactions retrieved successfully",
       transactions,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
     next(error);

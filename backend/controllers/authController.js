@@ -116,3 +116,98 @@ export const signout = async (req, res, next) => {
     next(error);
   }
 };
+
+// Get all users (Admin only)
+export const getUsers = async (req, res, next) => {
+  try {
+    const [users] = await db.execute(
+      "SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC"
+    );
+
+    res.json({
+      message: "Users retrieved successfully",
+      users,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Delete user (Admin only)
+export const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const currentUserId = req.user.userId;
+
+    // Prevent admin from deleting themselves
+    if (parseInt(id) === currentUserId) {
+      return res
+        .status(400)
+        .json({ message: "Cannot delete your own account" });
+    }
+
+    // Check if user exists
+    const [existing] = await db.execute("SELECT id FROM users WHERE id = ?", [
+      id,
+    ]);
+
+    if (existing.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Delete user
+    await db.execute("DELETE FROM users WHERE id = ?", [id]);
+
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get dashboard stats
+export const getDashboardStats = async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+
+    // Get total income
+    const [incomeResult] = await db.execute(
+      "SELECT COALESCE(SUM(total_amount), 0) as total FROM transactions WHERE user_id = ? AND type = 'income'",
+      [userId]
+    );
+
+    // Get total expenses
+    const [expenseResult] = await db.execute(
+      "SELECT COALESCE(SUM(total_amount), 0) as total FROM transactions WHERE user_id = ? AND type = 'expense'",
+      [userId]
+    );
+
+    // Get recent transactions
+    const [recentTransactions] = await db.execute(
+      "SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT 5",
+      [userId]
+    );
+
+    // Get transaction count
+    const [countResult] = await db.execute(
+      "SELECT COUNT(*) as count FROM transactions WHERE user_id = ?",
+      [userId]
+    );
+
+    const totalIncome = parseFloat(incomeResult[0].total);
+    const totalExpenses = parseFloat(expenseResult[0].total);
+    const netBalance = totalIncome - totalExpenses;
+
+    res.json({
+      message: "Dashboard stats retrieved successfully",
+      stats: {
+        totalIncome,
+        totalExpenses,
+        netBalance,
+        transactionCount: countResult[0].count,
+        recentTransactions
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
