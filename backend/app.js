@@ -5,6 +5,7 @@ import cors from "cors";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler.js";
 import { dbConnect } from "./config/dbConnect.js";
 import authRouter from "./routes/authRoute.js";
+import transactionRouter from "./routes/transactionRoute.js";
 
 dotenv.config();
 const app = express();
@@ -27,6 +28,7 @@ app.use("/health", (req, res) => {
 async function startServer() {
   await dbConnect();
   app.use("/api/v1/auth", authRouter);
+  app.use("/api/v1/transaction", transactionRouter);
   app.use(globalErrorHandler);
 
   const PORT = process.env.PORT || 4000;
